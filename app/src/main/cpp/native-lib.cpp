@@ -5,8 +5,13 @@
 #include <opencv2/imgproc.hpp>
 #include <opencv2/dnn.hpp>
 #include <opencv2/video.hpp>
+#include <opencv2/highgui/highgui.hpp>
+
 
 #include "android/bitmap.h"
+
+using namespace std;
+using namespace cv;
 
 void bitmapToMat(JNIEnv * env, jobject bitmap, cv::Mat &dst, jboolean
 needUnPremultiplyAlpha){
@@ -99,6 +104,39 @@ void matToBitmap(JNIEnv * env, cv::Mat src, jobject bitmap, jboolean needPremult
     }
 }
 
+// Filtro de bordes arcoíris en C++
+Mat filtroBordesArcoiris(const Mat& frame) {
+    Mat imaGris;
+    cvtColor(frame, imaGris, COLOR_BGR2GRAY);
+    Ptr<CLAHE> clahe = createCLAHE();
+    clahe->setClipLimit(2.0);
+    clahe->setTilesGridSize(Size(8, 8));
+    clahe->apply(imaGris, imaGris);
+    medianBlur(imaGris, imaGris, 5);
+    int lowerThreshold = 70;
+    int upperThreshold = 180;
+    Canny(imaGris, imaGris, lowerThreshold, upperThreshold);
+
+    Mat imaArcoirisHSV = Mat::zeros(frame.size(), CV_8UC3);
+    int ancho = frame.cols;
+
+    for (int y = 0; y < frame.rows; y++) {
+        for (int x = 0; x < ancho; x++) {
+            if (imaGris.at<uchar>(y, x) != 0) {
+                int hue = static_cast<int>((x / static_cast<float>(ancho)) * 180);
+                imaArcoirisHSV.at<Vec3b>(y, x) = Vec3b(hue, 255, 255);
+            }
+        }
+    }
+
+    Mat imaArcoirisBGR;
+    cvtColor(imaArcoirisHSV, imaArcoirisBGR, COLOR_HSV2BGR);
+
+    return imaArcoirisBGR;
+}
+
+
+
 extern "C" JNIEXPORT void JNICALL
 Java_epautec_atlas_appnativa_MainActivity_detectorBordes(
         JNIEnv* env,
@@ -117,7 +155,7 @@ Java_epautec_atlas_appnativa_MainActivity_detectorBordes(
     matToBitmap(env, bordes, bitmapOut, false);
 }
 
-using namespace std;
+
 
 extern "C" JNIEXPORT jstring
 
@@ -139,3 +177,19 @@ Java_epautec_atlas_appnativa_MainActivity_stringFromJNI(
     }
     return env->NewStringUTF(ss.str().c_str());
 }
+
+extern "C"
+JNIEXPORT jlong JNICALL
+Java_epautec_atlas_appnativa_SecondActivity_applyRainbowEdgeFilter(JNIEnv *env, jobject thiz, jlong matAddr) {
+    // Obtener la dirección de la Mat que se pasa desde Java
+    Mat &frame = *(Mat *) matAddr;
+
+    // Crear una nueva Mat para almacenar la imagen con el filtro
+    Mat filteredImage = filtroBordesArcoiris(frame);
+
+    // Devolver la dirección de la imagen procesada
+    return (jlong) &filteredImage;
+}
+
+
+
