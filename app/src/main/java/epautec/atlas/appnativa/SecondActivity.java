@@ -2,142 +2,260 @@ package epautec.atlas.appnativa;
 
 import android.Manifest;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
 import android.graphics.SurfaceTexture;
-import android.hardware.camera2.CameraCaptureSession;
-import android.hardware.camera2.CameraDevice;
-import android.hardware.camera2.CameraManager;
-import android.hardware.camera2.CameraMetadata;
-import android.hardware.camera2.CaptureRequest;
+import android.graphics.drawable.BitmapDrawable;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.Surface;
 import android.view.TextureView;
+import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.Toast;
-
 import androidx.annotation.NonNull;
-import androidx.annotation.Nullable;
-
-import androidx.activity.EdgeToEdge;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
+import android.hardware.camera2.*;
 
+import java.util.Collections;
 public class SecondActivity extends AppCompatActivity {
 
-    // Variables
-    private static final int REQUEST_CAMERA2_PERMISSION = 101;
+
+    static {
+        System.loadLibrary("appnativa");  // Asegúrate de que el nombre coincida con el de tu biblioteca nativa
+    }
+
+    private static final int REQUEST_CAMERA_PERMISSION = 200;
+
     private CameraDevice cameraDevice;
     private CameraCaptureSession cameraCaptureSession;
-    private CaptureRequest.Builder captureRequestBuilder;
+    private CameraManager cameraManager;
+    private String cameraId;
+
     private TextureView textureView;
-    private ImageView photoPreview;
+    private ImageView imageView;
+    private Button startCameraButton;
+    private Button applyFilterButton;
+
+    public native Bitmap ADDFiltro(Bitmap bitmap);
+
+    private boolean isCameraActive = false;
+    private boolean isFilterActive = false; // Indica si el filtro está activo
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        EdgeToEdge.enable(this);
         setContentView(R.layout.activity_second);
 
-        // Inicializar photoPreview y el botón de captura
         textureView = findViewById(R.id.textureView);
-        Button captureButton = findViewById(R.id.captureButton);
+        imageView = findViewById(R.id.imageViewFiltered); // ImageView para mostrar la imagen filtrada
+        startCameraButton = findViewById(R.id.startCameraButton);
+        applyFilterButton = findViewById(R.id.buttonApplyFilter);
 
-        // Configurar el botón para iniciar la cámara al hacer clic
-        captureButton.setOnClickListener(v -> {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
-                    != PackageManager.PERMISSION_GRANTED) {
-                // Solicitar permiso para la cámara
-                ActivityCompat.requestPermissions(this,
-                        new String[]{Manifest.permission.CAMERA},
-                        REQUEST_CAMERA2_PERMISSION);
-            } else {
-                // Permiso concedido, iniciar la cámara
+        cameraManager = (CameraManager) getSystemService(CAMERA_SERVICE);
+
+        startCameraButton.setOnClickListener(v -> {
+            if (ContextCompat.checkSelfPermission(SecondActivity.this, Manifest.permission.CAMERA)
+                    == PackageManager.PERMISSION_GRANTED) {
                 startCamera();
+            } else {
+                ActivityCompat.requestPermissions(SecondActivity.this,
+                        new String[]{Manifest.permission.CAMERA}, REQUEST_CAMERA_PERMISSION);
             }
         });
 
-        // Configuración de barras transparentes
-        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main), (v, insets) -> {
-            Insets systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars());
-            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom);
-            return insets;
+        applyFilterButton.setOnClickListener(v -> {
+            isFilterActive = !isFilterActive; // Alternar el estado del filtro
+            if (isFilterActive) {
+                Toast.makeText(this, "Filtro Activado", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "Filtro Desactivado", Toast.LENGTH_SHORT).show();
+                runOnUiThread(() -> {
+                    textureView.setVisibility(View.VISIBLE); // Mostrar vista previa de la cámara
+                    imageView.setVisibility(View.INVISIBLE); // Ocultar imagen filtrada
+                });
+            }
+        });
+
+        textureView.setSurfaceTextureListener(new TextureView.SurfaceTextureListener() {
+            @Override
+            public void onSurfaceTextureAvailable(@NonNull SurfaceTexture surfaceTexture, int width, int height) {
+                // La cámara se abrirá solo cuando se presione el botón
+            }
+
+            @Override
+            public void onSurfaceTextureSizeChanged(@NonNull SurfaceTexture surfaceTexture, int width, int height) {
+                // Opcionalmente puedes ajustar la cámara aquí
+            }
+
+            @Override
+            public boolean onSurfaceTextureDestroyed(@NonNull SurfaceTexture surfaceTexture) {
+                closeCamera();
+                return false;
+            }
+
+            @Override
+            public void onSurfaceTextureUpdated(@NonNull SurfaceTexture surfaceTexture) {
+                if (isFilterActive) {
+                    // Captura el fotograma actual como un Bitmap
+                    Bitmap bitmap = textureView.getBitmap();
+
+                    if (bitmap != null) {
+                        // Aplica el filtro nativo
+                        Bitmap filteredBitmap = ADDFiltro(bitmap);
+
+                        // Muestra el resultado en el ImageView
+                        runOnUiThread(() -> {
+                            imageView.setImageBitmap(filteredBitmap); // Actualiza la imagen filtrada
+                            imageView.setVisibility(View.VISIBLE);   // Asegúrate de que sea visible
+                        });
+                    }
+                } else {
+                    runOnUiThread(() -> {
+                        imageView.setVisibility(View.INVISIBLE); // Oculta la imagen filtrada
+                    });
+                }
+            }
+
         });
     }
 
-    // Método para iniciar la cámara
+    private void applyFilter() {
+        Bitmap bitmap = textureView.getBitmap(); // Obtener cuadro actual
+        Bitmap filteredBitmap = ADDFiltro(bitmap); // Aplicar filtro nativo
+
+        // Mostrar el Bitmap filtrado en el ImageView
+        runOnUiThread(() -> {
+            textureView.setVisibility(View.INVISIBLE); // Ocultar vista previa original
+            imageView.setImageBitmap(filteredBitmap); // Mostrar resultado filtrado
+            imageView.setVisibility(View.VISIBLE);
+        });
+    }
+
     private void startCamera() {
-        CameraManager cameraManager = (CameraManager) getSystemService(CAMERA_SERVICE);
         try {
-            String cameraId = cameraManager.getCameraIdList()[0]; // Usa la cámara trasera por defecto
-            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-                cameraManager.openCamera(cameraId, new CameraDevice.StateCallback() {
-                    @Override
-                    public void onOpened(@NonNull CameraDevice camera) {
-                        cameraDevice = camera;
-                        Surface surface = new Surface(textureView.getSurfaceTexture());
-                        try {
-                            captureRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
-                            captureRequestBuilder.addTarget(surface);
-
-                            cameraDevice.createCaptureSession(
-                                    java.util.Collections.singletonList(surface),
-                                    new CameraCaptureSession.StateCallback() {
-                                        @Override
-                                        public void onConfigured(@NonNull CameraCaptureSession session) {
-                                            if (cameraDevice == null) return;
-                                            cameraCaptureSession = session;
-                                            try {
-                                                captureRequestBuilder.set(CaptureRequest.CONTROL_MODE, CameraMetadata.CONTROL_MODE_AUTO);
-                                                cameraCaptureSession.setRepeatingRequest(captureRequestBuilder.build(), null, null);
-                                            } catch (Exception e) {
-                                                e.printStackTrace();
-                                            }
-                                        }
-
-                                        @Override
-                                        public void onConfigureFailed(@NonNull CameraCaptureSession session) {
-                                            Toast.makeText(SecondActivity.this, "Configuración de la cámara fallida", Toast.LENGTH_SHORT).show();
-                                        }
-                                    },
-                                    null
-                            );
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
-                    }
-
-                    @Override
-                    public void onDisconnected(@NonNull CameraDevice camera) {
-                        cameraDevice.close();
-                    }
-
-                    @Override
-                    public void onError(@NonNull CameraDevice camera, int error) {
-                        cameraDevice.close();
-                    }
-                }, null);
+            String[] cameraIds = cameraManager.getCameraIdList();
+            if (cameraIds.length == 0) {
+                Toast.makeText(this, "No se encontraron cámaras", Toast.LENGTH_SHORT).show();
+                return;
             }
-        } catch (Exception e) {
+
+            cameraId = null;
+            for (String id : cameraIds) {
+                CameraCharacteristics characteristics = cameraManager.getCameraCharacteristics(id);
+                Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
+
+                if (facing != null && facing == CameraCharacteristics.LENS_FACING_BACK) {
+                    cameraId = id;
+                    isCameraActive = true;
+                    break;
+                }
+            }
+
+            if (cameraId == null) {
+                Toast.makeText(this, "No se encontró la cámara trasera", Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            openCamera();
+        } catch (CameraAccessException e) {
+            e.printStackTrace();
+            Toast.makeText(this, "Error al acceder a la cámara", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void openCamera() {
+        try {
+            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+                    != PackageManager.PERMISSION_GRANTED) {
+                return;
+            }
+
+            cameraManager.openCamera(cameraId, new CameraDevice.StateCallback() {
+                @Override
+                public void onOpened(@NonNull CameraDevice camera) {
+                    cameraDevice = camera;
+                    createCameraPreview();
+                }
+
+                @Override
+                public void onDisconnected(@NonNull CameraDevice camera) {
+                    cameraDevice.close();
+                }
+
+                @Override
+                public void onError(@NonNull CameraDevice camera, int error) {
+                    cameraDevice.close();
+                }
+            }, null);
+        } catch (CameraAccessException e) {
             e.printStackTrace();
         }
     }
 
-    // Método para manejar el resultado de la solicitud de permisos
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQUEST_CAMERA2_PERMISSION) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                // Permiso concedido, iniciar la cámara
-                startCamera();
-            } else {
-                // Permiso denegado, mostrar un mensaje al usuario
-                Toast.makeText(this, "Se necesita permiso para usar la cámara", Toast.LENGTH_SHORT).show();
+    private void createCameraPreview() {
+        try {
+            SurfaceTexture texture = textureView.getSurfaceTexture();
+            if (texture == null) {
+                return;
             }
+
+            texture.setDefaultBufferSize(1920, 1080); // Ajusta según sea necesario
+            Surface surface = new Surface(texture);
+
+            CaptureRequest.Builder captureRequestBuilder;
+            captureRequestBuilder = cameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
+            captureRequestBuilder.addTarget(surface);
+
+            cameraDevice.createCaptureSession(Collections.singletonList(surface),
+                    new CameraCaptureSession.StateCallback() {
+                        @Override
+                        public void onConfigured(@NonNull CameraCaptureSession session) {
+                            if (cameraDevice == null) return;
+                            cameraCaptureSession = session;
+                            try {
+                                cameraCaptureSession.setRepeatingRequest(captureRequestBuilder.build(), null, null);
+                            } catch (CameraAccessException e) {
+                                e.printStackTrace();
+                            }
+                        }
+
+                        @Override
+                        public void onConfigureFailed(@NonNull CameraCaptureSession session) {
+                            Toast.makeText(SecondActivity.this, "Configuración fallida", Toast.LENGTH_SHORT).show();
+                        }
+                    }, null);
+        } catch (CameraAccessException e) {
+            e.printStackTrace();
         }
+    }
+
+    private void closeCamera() {
+        if (cameraDevice != null) {
+            cameraDevice.close();
+        }
+        if (cameraCaptureSession != null) {
+            cameraCaptureSession.close();
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
+                                           @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_CAMERA_PERMISSION && grantResults.length > 0
+                && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            startCamera();
+        } else {
+            Toast.makeText(this, "Permiso de cámara denegado", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        closeCamera();
     }
 }

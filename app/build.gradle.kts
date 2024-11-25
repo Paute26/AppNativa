@@ -16,6 +16,14 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // Configuración de las bibliotecas nativas
+    sourceSets {
+        getByName("main") {
+            // Se utiliza 'srcDir' para especificar el directorio correcto para jniLibs
+            jniLibs.srcDirs("src/main/jniLibs")
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -32,6 +40,7 @@ android {
             version = "3.22.1"
         }
     }
+
     buildFeatures {
         viewBinding = true
     }
