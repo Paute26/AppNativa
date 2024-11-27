@@ -44,14 +44,16 @@ android {
     buildFeatures {
         viewBinding = true
     }
+
 }
 
-dependencies {
 
+dependencies {
     implementation(libs.appcompat)
     implementation(libs.material)
     implementation(libs.constraintlayout)
     implementation(libs.activity)
+    implementation(libs.media3.ui)
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)

@@ -1,132 +1,189 @@
 package epautec.atlas.appnativa;
 
+import android.annotation.SuppressLint;
+
+import static android.widget.Toast.LENGTH_SHORT;
+
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Bundle;
+import android.os.Environment;
 import android.util.Log;
+import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity {
 
     static {
-        System.loadLibrary("appnativa"); // Nombre del archivo de biblioteca .so
+        System.loadLibrary("appnativa"); // Cargar la biblioteca nativa
     }
+    //private native Bitmap getFrameFromCamera(String url);
+    private ImageView camara;
+    private Button siguienteBtn;
+    private Button capturarBtn;
+    private String cameraUrl = "http://192.168.0.104:81/stream"; // URL del flujo MJPEG
+    private HttpURLConnection connection;
+    private boolean connected = false;
 
-    private ImageView imageView;
-    private Button startStream;
-
-    private Button navigatebtn;
-    private String cameraUrl = "http://192.168.0.105:81/stream"; // Dirección de tu cámara IP
-    private static final String TAG = "MJPEGStreamTask";
-    public native Bitmap procesarFrame(Bitmap bitmap);
-    private Bitmap currentFrame; // Para almacenar el frame actual
-    private ExecutorService executorService; // Para ejecutar tareas en segundo plano
-
+    @SuppressLint("MissingInflatedId")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        imageView = findViewById(R.id.imageView);
-        startStream = findViewById(R.id.btnStream);
-        navigatebtn = findViewById(R.id.navigate);
+        camara = findViewById(R.id.pantalla);
+        siguienteBtn = findViewById(R.id.navigate);
+        capturarBtn = findViewById(R.id.btnStream);
 
-        executorService = Executors.newSingleThreadExecutor(); // Inicializa el Executor
-
-        startStream.setOnClickListener(v -> {
-            // Inicia la tarea de captura de flujo MJPEG
-            Toast.makeText(this, "Iniciando flujo", Toast.LENGTH_SHORT).show();
-            startMJPEGStream();
-        });
-
-        Button applyFilterButton = findViewById(R.id.applyFilterButton);
-
-        applyFilterButton.setOnClickListener(v -> {
-            if (currentFrame != null) {
-                // Convierte el Bitmap actual en byte[]
-                Bitmap processedFrame = procesarFrame(currentFrame); // Llamar al filtro nativo
-
-                if (processedFrame != null) {
-                    // Muestra el frame procesado
-                    imageView.setImageBitmap(processedFrame);
+        //Capturar imagen desde Boton
+        capturarBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                if (connected) {
+                    disconnect();
+                    Log.e("MainActivity", "Finalizado: cámara");
                 } else {
-                    Log.e(TAG, "Error al procesar el frame");
+                    connect();
+                    //Toast.makeText(this,"Activado", Toast.LENGTH_SHORT).show();
                 }
             }
         });
+        siguienteBtn.setOnClickListener(v -> {
+             // Redirigir a SecondActivity
+              Intent intent = new Intent(MainActivity.this, SecondActivity.class);
+              startActivity(intent);
+          });
 
-        navigatebtn.setOnClickListener(v -> {
-            // Redirigir a SecondActivity
-            Intent intent = new Intent(MainActivity.this, SecondActivity.class);
-            startActivity(intent);
-        });
+        //
     }
 
-    private void startMJPEGStream() {
-        executorService.execute(() -> {
-            try {
-                // Conexión HTTP para obtener el flujo MJPEG de la cámara
-                HttpURLConnection connection = (HttpURLConnection) new URL(cameraUrl).openConnection();
-                connection.setDoInput(true);
-                connection.setConnectTimeout(10000);
-                connection.setReadTimeout(10000);
-                InputStream inputStream = connection.getInputStream();
+    private void connect() {
+        Thread thread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                BufferedInputStream bis = null;
+                try {
+                    URL url = new URL(cameraUrl);
+                    connection = (HttpURLConnection) url.openConnection();
+                    connection.setRequestMethod("GET");
+                    connection.setConnectTimeout(1000 * 5);
+                    connection.setReadTimeout(1000 * 5);
+                    connection.setDoInput(true);
+                    connection.connect();
 
-                int bytesRead;
-                byte[] buffer = new byte[1024];
-                ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                    if (connection.getResponseCode() == 200) {
+                        connected = true;
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                capturarBtn.setText("Desconectar");
+                            }
+                        });
 
-                while ((bytesRead = inputStream.read(buffer)) != -1) {
-                    byteArrayOutputStream.write(buffer, 0, bytesRead);
+                        InputStream in = connection.getInputStream();
+                        InputStreamReader isr = new InputStreamReader(in);
+                        BufferedReader br = new BufferedReader(isr);
 
-                    // Aquí es donde puedes decodificar el flujo MJPEG para obtener los frames
-                    byte[] frameData = byteArrayOutputStream.toByteArray();
+                        String data;
+                        int len;
+                        byte[] buffer;
 
-                    // Decodificar el frame como un Bitmap
-                    Bitmap frame = decodeMJPEGFrame(frameData);
+                        while ((data = br.readLine()) != null) {
+                            if (data.contains("Content-Type:")) {
 
-                    if (frame != null) {
-                        currentFrame = frame;
-                        runOnUiThread(() -> imageView.setImageBitmap(frame)); // Actualiza la UI en el hilo principal
+                                data = br.readLine();
+                                len = Integer.parseInt(data.split(":")[1].trim());
+                                bis = new BufferedInputStream(in);
+                                buffer = new byte[len];
+
+                                int t = 0;
+                                while (t < len) {
+                                    t += bis.read(buffer, t, len - t);
+                                }
+
+                                //System.out.println("-->" + Arrays.toString(buffer));
+
+                                Bytes2ImageFile(buffer, getExternalFilesDir(Environment.DIRECTORY_PICTURES) + "/0A.jpg");
+                                final Bitmap bitmap = BitmapFactory.decodeFile(getExternalFilesDir(Environment.DIRECTORY_PICTURES) + "/0A.jpg");
+                                //byte[] byteArray = bitmapToByteArray(bitmap);
+
+                                //processImageInCpp(byteArray);
+                                android.graphics.Bitmap bOut = bitmap.copy(bitmap.getConfig(), true);
+                                //detectorBordes(bitmap, bOut);
+                                Log.e("MainActivity", "Filtro: Ingreso ...");
+                                runOnUiThread(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        //connectButton.setText("OFF");
+                                        camara.setImageBitmap(bOut);
+                                    }
+                                });
+                            }
+                        }
                     }
-
-                    byteArrayOutputStream.reset(); // Resetea el buffer para el siguiente frame
+                } catch (MalformedURLException e) {
+                    e.printStackTrace();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                } finally {
+                    disconnect();
                 }
-            } catch (Exception e) {
-                Log.e(TAG, "Error al procesar el flujo MJPEG", e);
             }
         });
+        thread.start();
+    }
+    private void disconnect() {
+        if (connection != null) {
+            connection.disconnect();
+        }
+
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                capturarBtn.setText("Conectar");
+            }
+        });
+
+        connected = false;
     }
 
-    // Decodifica los bytes del flujo MJPEG en un Bitmap
-    private Bitmap decodeMJPEGFrame(byte[] frameData) {
-        // Utiliza alguna librería para decodificar el flujo MJPEG a un Bitmap
-        // Aquí un ejemplo de decodificación (puedes usar una librería como Android's BitmapFactory)
-        return BitmapFactory.decodeByteArray(frameData, 0, frameData.length);
+    private byte[] bitmapToByteArray(Bitmap bitmap) {
+        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 100, byteArrayOutputStream);
+        return byteArrayOutputStream.toByteArray();
     }
+
+    private void Bytes2ImageFile(byte[] bytes, String fileName) {
+        try {
+            File file = new File(fileName);
+            FileOutputStream fos = new FileOutputStream(file);
+            fos.write(bytes, 0, bytes.length);
+            fos.flush();
+            fos.close();
+
+        } catch (Exception e)
+        {
+            e.printStackTrace();
+        }
+    }
+
+    //public native void getFrameFromCamera(android.graphics.Bitmap in, android.graphics.Bitmap out);
+
 }
-
-
-
-/**
- * A native method that is implemented by the 'appnativa' native library,
- * which is packaged with this application.
- * // Configuración del botón "Ir a SecondActivity"
- *         navigateButton.setOnClickListener(v -> {
- *             // Redirigir a SecondActivity
- *             Intent intent = new Intent(MainActivity.this, SecondActivity.class);
- *             startActivity(intent);
- *         });
- */

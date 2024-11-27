@@ -7,68 +7,40 @@
     android:orientation="vertical"
     android:gravity="center">
 
-    <androidx.constraintlayout.widget.ConstraintLayout
-        android:layout_width="match_parent"
-        android:layout_height="match_parent">
+    <ImageView
+        android:id="@+id/pantalla"
+        android:layout_width="248dp"
+        android:layout_height="218dp"
+        android:layout_marginTop="84dp"
+        app:srcCompat="@drawable/post" />
 
-        <ImageView
-            android:id="@+id/imageView"
-            android:layout_width="267dp"
-            android:layout_height="158dp"
-            android:layout_marginTop="336dp"
-            android:scaleType="fitCenter"
-            app:layout_constraintBottom_toTopOf="@+id/applyFilterButton"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent" />
+    <VideoView
+        android:id="@+id/videoView"
+        android:layout_width="267dp"
+        android:layout_height="158dp"
+        android:scaleType="fitCenter" />
 
-        <Button
-            android:id="@+id/btnStream"
-            android:layout_width="225dp"
-            android:layout_height="47dp"
-            android:layout_marginBottom="72dp"
-            android:backgroundTint="#2196F3"
-            android:text="Iniciar"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent" />
+    <Button
+        android:id="@+id/btnStream"
+        android:layout_width="230dp"
+        android:layout_height="89dp"
+        android:layout_marginBottom="72dp"
+        android:backgroundTint="#2196F3"
+        android:text="Iniciar" />
 
-        <Button
-            android:id="@+id/applyFilterButton"
-            android:layout_width="235dp"
-            android:layout_height="38dp"
-            android:text="Aplicar filtro"
-            app:layout_constraintBottom_toTopOf="@+id/btnStream"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            tools:ignore="MissingConstraints" />
+    <Button
+        android:id="@+id/applyFilterButton"
+        android:layout_width="261dp"
+        android:layout_height="62dp"
+        android:text="Aplicar filtro"
+        tools:ignore="MissingConstraints" />
 
-        <ImageView
-            android:id="@+id/processedImageView"
-            android:layout_width="300dp"
-            android:layout_height="187dp"
-            android:layout_weight="1"
-            app:layout_constraintBottom_toTopOf="@+id/imageView"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            tools:ignore="MissingConstraints" />
-
-        <Button
-            android:id="@+id/navigate"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:backgroundTint="#002EA5"
-            android:text="Camara"
-            android:textColor="#FFFFFF"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintHorizontal_bias="0.949"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintVertical_bias="0.971" />
-
-
-    </androidx.constraintlayout.widget.ConstraintLayout>
+    <Button
+        android:id="@+id/navigate"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:backgroundTint="#002EA5"
+        android:text="Camara"
+        android:textColor="#FFFFFF" />
 
 </LinearLayout>
