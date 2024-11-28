@@ -1,6 +1,5 @@
 #include <jni.h>
 #include <vector>
-#include <jni.h>
 #include <android/bitmap.h> // Esto es necesario para trabajar con Bitmap
 #include <opencv2/opencv.hpp>
 #include <opencv2/imgproc.hpp>
@@ -10,7 +9,7 @@
 #include <android/log.h>
 
 using namespace cv;
-
+//Funciones
 Mat filtroBordesArcoiris(const Mat& frame) {
     Mat imaGris;
     cvtColor(frame, imaGris, COLOR_BGR2GRAY);
@@ -44,25 +43,22 @@ Mat filtroBordesArcoiris(const Mat& frame) {
     return imaArcoirisBGR;
 }
 
-#include <jni.h>
-#include <android/bitmap.h>
-#include <opencv2/opencv.hpp>
-using namespace cv;
 
 extern "C"
 JNIEXPORT jobject JNICALL
 Java_epautec_atlas_appnativa_MainActivity_procesarFrame(JNIEnv *env, jobject thiz, jobject bitmap) {
-    // Verifica si el bitmap es nulo
-    if (bitmap == nullptr) {
-        return nullptr;
-    }
-
+    // Convierte el objeto Bitmap de Android a un objeto Mat de OpenCV
     AndroidBitmapInfo info;
     void* pixels;
 
     // Obtén la información sobre el bitmap (como tamaño y tipo)
     AndroidBitmap_getInfo(env, bitmap, &info);
 
+    // Verifica si el formato es el esperado
+    if (info.format != ANDROID_BITMAP_FORMAT_RGBA_8888) {
+        __android_log_print(ANDROID_LOG_ERROR, "JNI", "Formato de bitmap no soportado: %d", info.format);
+        return nullptr;
+    }
     // Bloquea los píxeles del Bitmap para manipularlos
     AndroidBitmap_lockPixels(env, bitmap, &pixels);
 
@@ -71,6 +67,7 @@ Java_epautec_atlas_appnativa_MainActivity_procesarFrame(JNIEnv *env, jobject thi
 
     // Aplica el filtro a la imagen
     Mat result = filtroBordesArcoiris(img);
+    //__android_log_print(ANDROID_LOG_ERROR, "ATLAS", "CANALES: %d", result.channels());
 
     // Obtén la clase Bitmap y el método estático createBitmap
     jclass bitmapClass = env->FindClass("android/graphics/Bitmap");
@@ -78,37 +75,52 @@ Java_epautec_atlas_appnativa_MainActivity_procesarFrame(JNIEnv *env, jobject thi
                                                           "createBitmap",
                                                           "(IILandroid/graphics/Bitmap$Config;)Landroid/graphics/Bitmap;");
 
-    // Obtén el valor del campo estático ARGB_8888 de Bitmap.Config
+    // Usamos ARGB_8888 ya que es el formato de 4 canales que se maneja bien en OpenCV
     jclass bitmapConfigClass = env->FindClass("android/graphics/Bitmap$Config");
-    jfieldID argb8888Field = env->GetStaticFieldID(bitmapConfigClass,
-                                                   "ARGB_8888",
-                                                   "Landroid/graphics/Bitmap$Config;");
-    jobject argb8888 = env->GetStaticObjectField(bitmapConfigClass, argb8888Field);
+    jfieldID argb8888FieldID = env->GetStaticFieldID(bitmapConfigClass, "ARGB_8888", "Landroid/graphics/Bitmap$Config;");
+    jobject argb8888Config = env->GetStaticObjectField(bitmapConfigClass, argb8888FieldID);
 
-    // Crea un nuevo Bitmap utilizando el método estático createBitmap
-    jobject resultBitmap = env->CallStaticObjectMethod(bitmapClass,
-                                                       createBitmapMethod,
-                                                       result.cols, result.rows,
-                                                       argb8888);
+    // Crear el Bitmap resultante con las mismas dimensiones de la imagen original
+    jobject resultBitmap = env->CallStaticObjectMethod(bitmapClass, createBitmapMethod,
+                                                       result.cols, result.rows, argb8888Config);
 
     // Copia los datos de la Mat a la nueva imagen Bitmap
     void* resultPixels;
     AndroidBitmap_lockPixels(env, resultBitmap, &resultPixels);
 
-    // Copia de los datos del Mat al Bitmap
-    memcpy(resultPixels, result.data, result.total() * result.elemSize());
+    // Asegurarnos de que los datos de la imagen resultante se copien correctamente
+    // La clave aquí es asegurarse de que los datos no se copien múltiples veces
+    if (result.channels() == 3) {
+        uint8_t* ptr = (uint8_t*)resultPixels;
+        for (int y = 0; y < result.rows; ++y) {
+            for (int x = 0; x < result.cols; ++x) {
+                cv::Vec3b pixel = result.at<cv::Vec3b>(y, x);
+                ptr[(y * result.cols + x) * 4 + 0] = pixel[2]; // R
+                ptr[(y * result.cols + x) * 4 + 1] = pixel[1]; // G
+                ptr[(y * result.cols + x) * 4 + 2] = pixel[0]; // B
+                ptr[(y * result.cols + x) * 4 + 3] = 255;      // A
+            }
+        }
+    }
+    else {
+        __android_log_print(ANDROID_LOG_ERROR, "JNI", "La imagen no tiene 1 canal después del filtro");
+        return nullptr;
+    }
 
+    //memcpy(resultPixels, result.data, result.total() * result.elemSize());
     AndroidBitmap_unlockPixels(env, resultBitmap);
-    AndroidBitmap_unlockPixels(env, bitmap); // Desbloquea el bitmap original
+
+    // Desbloquea el bitmap original
+    AndroidBitmap_unlockPixels(env, bitmap);
 
     return resultBitmap;
 }
 
-//TEST -----------Aprendizaje
 
+//TEST ----------- SecondMain
 extern "C"
 JNIEXPORT jobject JNICALL
-Java_epautec_atlas_appnativa_SecondActivity_filtroBA(JNIEnv *env, jobject thiz, jobject bitmap) {
+Java_epautec_atlas_appnativa_SecondActivity_filtroRainbow(JNIEnv *env, jobject thiz, jobject bitmap) {
     // Convierte el objeto Bitmap de Android a un objeto Mat de OpenCV
     AndroidBitmapInfo info;
     void* pixels;
@@ -157,7 +169,8 @@ Java_epautec_atlas_appnativa_SecondActivity_filtroBA(JNIEnv *env, jobject thiz, 
 }
 
 //TEST---------------------------------------------------------------------------------------------
-
+//ApplyFIterNAtive es un ejemplo de como tratar imagenes asi que es un ejemplo base
+//Se aplico para SecondActivity
 extern "C"
 JNIEXPORT jobject JNICALL
 Java_epautec_atlas_appnativa_SecondActivity_applyFilterNative(JNIEnv *env, jobject thiz, jobject bitmap) {
@@ -236,75 +249,3 @@ Java_epautec_atlas_appnativa_SecondActivity_applyFilterNative(JNIEnv *env, jobje
     return resultBitmap;
 }
 
-
-extern "C"
-JNIEXPORT jobject JNICALL
-Java_epautec_atlas_appnativa_SecondActivity_ADDFiltro(JNIEnv *env, jobject thiz, jobject bitmap) {
-    // Convierte el objeto Bitmap de Android a un objeto Mat de OpenCV
-    AndroidBitmapInfo info;
-    void* pixels;
-
-    // Obtén la información sobre el bitmap (como tamaño y tipo)
-    AndroidBitmap_getInfo(env, bitmap, &info);
-
-    // Verifica si el formato es el esperado
-    if (info.format != ANDROID_BITMAP_FORMAT_RGBA_8888) {
-        __android_log_print(ANDROID_LOG_ERROR, "JNI", "Formato de bitmap no soportado: %d", info.format);
-        return nullptr;
-    }
-    // Bloquea los píxeles del Bitmap para manipularlos
-    AndroidBitmap_lockPixels(env, bitmap, &pixels);
-
-    // Convierte los píxeles bloqueados del Bitmap en una imagen de OpenCV (Mat)
-    Mat img(info.height, info.width, CV_8UC4, pixels);
-
-    // Aplica el filtro a la imagen
-    Mat result = filtroBordesArcoiris(img);
-    //__android_log_print(ANDROID_LOG_ERROR, "ATLAS", "CANALES: %d", result.channels());
-
-    // Obtén la clase Bitmap y el método estático createBitmap
-    jclass bitmapClass = env->FindClass("android/graphics/Bitmap");
-    jmethodID createBitmapMethod = env->GetStaticMethodID(bitmapClass,
-                                                          "createBitmap",
-                                                          "(IILandroid/graphics/Bitmap$Config;)Landroid/graphics/Bitmap;");
-
-    // Usamos ARGB_8888 ya que es el formato de 4 canales que se maneja bien en OpenCV
-    jclass bitmapConfigClass = env->FindClass("android/graphics/Bitmap$Config");
-    jfieldID argb8888FieldID = env->GetStaticFieldID(bitmapConfigClass, "ARGB_8888", "Landroid/graphics/Bitmap$Config;");
-    jobject argb8888Config = env->GetStaticObjectField(bitmapConfigClass, argb8888FieldID);
-
-    // Crear el Bitmap resultante con las mismas dimensiones de la imagen original
-    jobject resultBitmap = env->CallStaticObjectMethod(bitmapClass, createBitmapMethod,
-                                                       result.cols, result.rows, argb8888Config);
-
-    // Copia los datos de la Mat a la nueva imagen Bitmap
-    void* resultPixels;
-    AndroidBitmap_lockPixels(env, resultBitmap, &resultPixels);
-
-    // Asegurarnos de que los datos de la imagen resultante se copien correctamente
-    // La clave aquí es asegurarse de que los datos no se copien múltiples veces
-    if (result.channels() == 3) {
-        uint8_t* ptr = (uint8_t*)resultPixels;
-        for (int y = 0; y < result.rows; ++y) {
-            for (int x = 0; x < result.cols; ++x) {
-                cv::Vec3b pixel = result.at<cv::Vec3b>(y, x);
-                ptr[(y * result.cols + x) * 4 + 0] = pixel[2]; // R
-                ptr[(y * result.cols + x) * 4 + 1] = pixel[1]; // G
-                ptr[(y * result.cols + x) * 4 + 2] = pixel[0]; // B
-                ptr[(y * result.cols + x) * 4 + 3] = 255;      // A
-            }
-        }
-    }
-    else {
-        __android_log_print(ANDROID_LOG_ERROR, "JNI", "La imagen no tiene 1 canal después del filtro");
-        return nullptr;
-    }
-
-    //memcpy(resultPixels, result.data, result.total() * result.elemSize());
-    AndroidBitmap_unlockPixels(env, resultBitmap);
-
-    // Desbloquea el bitmap original
-    AndroidBitmap_unlockPixels(env, bitmap);
-
-    return resultBitmap;
-}

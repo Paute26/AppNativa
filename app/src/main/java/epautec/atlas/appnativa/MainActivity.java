@@ -38,7 +38,8 @@ public class MainActivity extends AppCompatActivity {
     private ImageView camara;
     private Button siguienteBtn;
     private Button capturarBtn;
-    private String cameraUrl = "http://192.168.0.104:81/stream"; // URL del flujo MJPEG
+    private String cameraUrl = "http://192.168.0.102:8080/stream"; // URL del flujo MJPEG
+    public native Bitmap procesarFrame(Bitmap bitmap);
     private HttpURLConnection connection;
     private boolean connected = false;
 
@@ -80,11 +81,12 @@ public class MainActivity extends AppCompatActivity {
             public void run() {
                 BufferedInputStream bis = null;
                 try {
+                    // Establecer la conexión
                     URL url = new URL(cameraUrl);
                     connection = (HttpURLConnection) url.openConnection();
                     connection.setRequestMethod("GET");
-                    connection.setConnectTimeout(1000 * 5);
-                    connection.setReadTimeout(1000 * 5);
+                    connection.setConnectTimeout(5000 * 5);
+                    connection.setReadTimeout(5000 * 5);
                     connection.setDoInput(true);
                     connection.connect();
 
@@ -97,6 +99,7 @@ public class MainActivity extends AppCompatActivity {
                             }
                         });
 
+                        // Leer los datos de la respuesta
                         InputStream in = connection.getInputStream();
                         InputStreamReader isr = new InputStreamReader(in);
                         BufferedReader br = new BufferedReader(isr);
@@ -107,7 +110,7 @@ public class MainActivity extends AppCompatActivity {
 
                         while ((data = br.readLine()) != null) {
                             if (data.contains("Content-Type:")) {
-
+                                // Leer el tamaño de la imagen
                                 data = br.readLine();
                                 len = Integer.parseInt(data.split(":")[1].trim());
                                 bis = new BufferedInputStream(in);
@@ -118,37 +121,65 @@ public class MainActivity extends AppCompatActivity {
                                     t += bis.read(buffer, t, len - t);
                                 }
 
-                                //System.out.println("-->" + Arrays.toString(buffer));
-
+                                // Guardar la imagen como archivo
                                 Bytes2ImageFile(buffer, getExternalFilesDir(Environment.DIRECTORY_PICTURES) + "/0A.jpg");
-                                final Bitmap bitmap = BitmapFactory.decodeFile(getExternalFilesDir(Environment.DIRECTORY_PICTURES) + "/0A.jpg");
-                                //byte[] byteArray = bitmapToByteArray(bitmap);
 
-                                //processImageInCpp(byteArray);
-                                android.graphics.Bitmap bOut = bitmap.copy(bitmap.getConfig(), true);
-                                //detectorBordes(bitmap, bOut);
-                                Log.e("MainActivity", "Filtro: Ingreso ...");
-                                runOnUiThread(new Runnable() {
-                                    @Override
-                                    public void run() {
-                                        //connectButton.setText("OFF");
-                                        camara.setImageBitmap(bOut);
-                                    }
-                                });
+                                // Decodificar la imagen desde el archivo
+                                final Bitmap bitmap = BitmapFactory.decodeFile(getExternalFilesDir(Environment.DIRECTORY_PICTURES) + "/0A.jpg");
+
+                                // Verificar si la imagen fue decodificada correctamente
+                                if (bitmap != null) {
+                                    android.graphics.Bitmap bOut = bitmap.copy(bitmap.getConfig(), true);
+                                    Bitmap filtro = procesarFrame(bOut);
+                                    runOnUiThread(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            // Mostrar la imagen en el ImageView
+                                            camara.setImageBitmap(filtro);
+                                        }
+                                    });
+                                } else {
+                                    Log.e("MainActivity", "La imagen no se pudo decodificar.");
+                                    runOnUiThread(new Runnable() {
+                                        @Override
+                                        public void run() {
+                                            Toast.makeText(MainActivity.this, "Error al obtener la imagen", LENGTH_SHORT).show();
+                                        }
+                                    });
+                                }
                             }
                         }
+                    } else {
+                        Log.e("MainActivity", "Error de conexión: " + connection.getResponseCode());
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                Toast.makeText(MainActivity.this, "Error de conexión", LENGTH_SHORT).show();
+                            }
+                        });
                     }
                 } catch (MalformedURLException e) {
+                    Log.e("MainActivity", "URL mal formada", e);
                     e.printStackTrace();
                 } catch (IOException e) {
+                    Log.e("MainActivity", "Error de E/S al leer la imagen", e);
                     e.printStackTrace();
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            Toast.makeText(MainActivity.this, "Error de E/S", LENGTH_SHORT).show();
+                        }
+                    });
                 } finally {
+                    // Desconectar
                     disconnect();
                 }
             }
         });
         thread.start();
     }
+
+
     private void disconnect() {
         if (connection != null) {
             connection.disconnect();
