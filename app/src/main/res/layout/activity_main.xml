@@ -1,38 +1,50 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:gravity="center">
+    android:orientation="vertical">
 
     <ImageView
         android:id="@+id/pantalla"
         android:layout_width="248dp"
         android:layout_height="218dp"
-        android:layout_marginTop="84dp"
-        app:srcCompat="@drawable/post" />
+        android:layout_marginTop="52dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
 
-    <VideoView
-        android:id="@+id/videoView"
-        android:layout_width="267dp"
-        android:layout_height="158dp"
-        android:scaleType="fitCenter" />
+    <LinearLayout
+        android:layout_width="294dp"
+        android:layout_height="181dp"
+        android:layout_marginTop="64dp"
+        android:orientation="vertical"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/pantalla"></LinearLayout>
 
     <Button
         android:id="@+id/btnStream"
-        android:layout_width="230dp"
-        android:layout_height="89dp"
-        android:layout_marginBottom="72dp"
+        android:layout_width="154dp"
+        android:layout_height="57dp"
+        android:layout_marginBottom="112dp"
         android:backgroundTint="#2196F3"
-        android:text="Iniciar" />
+        android:text="Iniciar"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.506"
+        app:layout_constraintStart_toEndOf="@+id/applyFilterButton" />
 
     <Button
         android:id="@+id/applyFilterButton"
-        android:layout_width="261dp"
-        android:layout_height="62dp"
+        android:layout_width="139dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="44dp"
+        android:layout_marginBottom="116dp"
         android:text="Aplicar filtro"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
         tools:ignore="MissingConstraints" />
 
     <Button
@@ -41,6 +53,9 @@
         android:layout_height="wrap_content"
         android:backgroundTint="#002EA5"
         android:text="Camara"
-        android:textColor="#FFFFFF" />
+        android:textColor="#FFFFFF"
+        tools:layout_editor_absoluteX="158dp"
+        tools:layout_editor_absoluteY="656dp"
+        tools:ignore="MissingConstraints" />
 
-</LinearLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>
